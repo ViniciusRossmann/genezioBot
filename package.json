@@ -1,0 +1,32 @@
+{
+  "name": "geneziobot",
+  "version": "1.0.0",
+  "description": "Discord bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node-dev src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ViniciusRossmann/genezioBot.git"
+  },
+  "keywords": [
+    "Discord",
+    "Bot"
+  ],
+  "author": "Vinicius Rossmann Nunes",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ViniciusRossmann/genezioBot/issues"
+  },
+  "homepage": "https://github.com/ViniciusRossmann/genezioBot#readme",
+  "devDependencies": {
+    "@types/node": "^16.9.2",
+    "ts-node": "^10.2.1",
+    "ts-node-dev": "^1.1.8",
+    "typescript": "^4.4.3"
+  },
+  "dependencies": {
+    "dotenv-safe": "^8.2.0"
+  }
+}
