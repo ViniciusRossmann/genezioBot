@@ -11,7 +11,7 @@ client.on('ready', async () => {
     console.log(`Logged in as ${client.user.tag}!`);
 });
 
-client.on("messageCreate", async (message) => {
+client.on("messageCreate", async (message: any) => {
     if (message.author.bot) return;
     if (!message.content.startsWith(prefix)) return;
   

@@ -1,4 +1,5 @@
 import * as youtubeSearch from "youtube-search";
+var search = require('youtube-search');
 
 const opts: youtubeSearch.YouTubeSearchOptions = {
     maxResults: 1,
@@ -7,8 +8,9 @@ const opts: youtubeSearch.YouTubeSearchOptions = {
 
 export async function getURLfromSearch(pesquisa: string){
     return new Promise((result, error) => {
-        youtubeSearch(pesquisa, opts, (err, results) => {
+        search(pesquisa, opts, (err: any, results: any) => {
             if(err) error(err);
+            //@ts-ignore
             else result(results[0].link);
         });
     });

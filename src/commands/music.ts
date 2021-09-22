@@ -1,8 +1,5 @@
-require('dotenv/config');
-const ytdl = require("ytdl-core-discord");
-const { VoiceChannel } = require('discord.js');
 import { getURLfromSearch } from '../utils/youtubeUtils';
-
+import { Server } from '../types/interfaces';
 import {
     joinVoiceChannel,
     createAudioPlayer,
@@ -12,52 +9,86 @@ import {
     AudioPlayerStatus,
     VoiceConnectionStatus,
 } from '@discordjs/voice';
+const ytdl = require("ytdl-core-discord");
+const { VoiceChannel } = require('discord.js');
 
-const player = createAudioPlayer();
-var queue = [];
-var connection;
 
-export async function tocar(message, arg) {
-    var { channel } = message.member.voice;
-    if (!channel) {
-        return message.reply(`É necessário estar em um canal de voz!`);
-    }
-    if (!arg) {
-        return message.reply(`É preciso informar o que vc quer tocar!`);
-    }
+var servers: Server[] = [];
 
-    if (connection) {
-        if (connection.state.status == VoiceConnectionStatus.Disconnected || connection.state.status == VoiceConnectionStatus.Destroyed) {
-            await connection.rejoin();
+export async function tocar(message: any, arg: any) {
+    try{
+        var { channel } = message.member.voice;
+        if (!channel) {
+            return message.reply(`É necessário estar em um canal de voz!`);
         }
-        if (connection.joinConfig.channelId != channel.id) {
-            return message.reply(`Já estou em outro canal!`);
+        if (!arg) {
+            return message.reply(`É preciso informar o que vc quer tocar!`);
         }
-    }
-    else connection = await connectToChannel(channel);
+        let url = arg.includes("youtube.com") ? arg : await getURLfromSearch(arg);
+        var guildId = message.guild.id;
+        var server = servers.find(s => s.id == guildId);
+        if (!server){
+            server = {
+                id: guildId,
+                player: await createAudioPlayer(),
+                connection: await connectToChannel(channel),
+                queue: []
+            }
+            servers.push(server);
 
-    let url = arg.includes("youtube.com") ? arg : await getURLfromSearch(arg);
-    queue.push(url);
+            server.connection?.subscribe(server.player);
 
-    if (player.state.status != AudioPlayerStatus.Playing) {
-        processQueue();
-        return message.reply(`Ta na mão!`);
+            server.connection?.on('stateChange', (oldState, newState) => {
+                if ((newState.status === VoiceConnectionStatus.Disconnected && oldState.status !== VoiceConnectionStatus.Disconnected) || (newState.status === VoiceConnectionStatus.Destroyed && newState.status !== VoiceConnectionStatus.Destroyed)) {
+                    disconnect(server);
+                }
+            });
+
+            server.player.on('stateChange', (oldState, newState) => {
+                if (newState.status === AudioPlayerStatus.Idle && oldState.status !== AudioPlayerStatus.Idle) {
+                    server?.queue.shift();
+                    processQueue(server);
+                }
+            });
+        }
+        server.queue.push(url);
+        if (server.connection) {
+            if (server.connection.state.status == VoiceConnectionStatus.Disconnected || server.connection.state.status == VoiceConnectionStatus.Destroyed) {
+                await server.connection.rejoin();
+            }
+            if (server.connection.joinConfig.channelId && server.connection.joinConfig.channelId != channel.id) {
+                return message.reply(`Já estou em outro canal!`);
+            }
+        }
+        else server.connection = await connectToChannel(channel);
+
+        if (server.player.state.status != AudioPlayerStatus.Playing) {
+            processQueue(server);
+            return message.reply(`Ta na mão!`);
+        }
+        return message.reply(`Coloquei na fila. Posição atual: ${server.queue.length - 1}.`);
+    } catch (err) {
+        return message.reply(`Não deu :( => ${err}`);
     }
-    return message.reply(`Coloquei na fila. Posição atual: ${queue.length - 1}.`);
 }
 
-export async function pular(message) {
-    var { channel } = message.member.voice;
-    if (!connection || !player) {
-        return message.reply(`Não estou tocando nada!`);
+export async function pular(message: any) {
+    try{
+        var { channel } = message.member.voice;
+        var guildId = message.guild.id;
+        var server = servers.find(s => s.id == guildId);
+        if (!server || !server.connection || !server.player){
+            return message.reply(`Não estou tocando nada!`);
+        }
+        if (!channel || server.connection.joinConfig.channelId != channel.id) {
+            return message.reply(`Só alguem de dentro do canal em que estou pode fazer isso.`);
+        }
+        server.queue.shift();
+        processQueue(server);
+        return message.reply(`Ta bão então.`);
+    } catch (err) {
+        return message.reply(`Não deu :( => ${err}`);
     }
-    if (!channel || connection.joinConfig.channelId != channel.id) {
-        return message.reply(`Só alguem de dentro do canal em que estou pode fazer isso.`);
-    }
-
-    queue.shift();
-    processQueue();
-    return message.reply(`Ta bão então.`);
 }
 
 async function connectToChannel(channel: typeof VoiceChannel) {
@@ -69,75 +100,62 @@ async function connectToChannel(channel: typeof VoiceChannel) {
     });
     try {
         await entersState(connection, VoiceConnectionStatus.Ready, 30e3);
-        connection.subscribe(player);
-
-        connection.on('stateChange', (oldState, newState) => {
-            if ((newState.status === VoiceConnectionStatus.Disconnected && oldState.status !== VoiceConnectionStatus.Disconnected) || (newState.status === VoiceConnectionStatus.Destroyed && newState.status !== VoiceConnectionStatus.Destroyed)) {
-                disconnect();
-            }
-        });
-
         return connection;
-    } catch (error) {
+    } catch (err) {
         connection.destroy();
-        throw error;
+        throw err;
     }
 }
 
-function disconnect() {
+function disconnect(server: Server|undefined) {
     try {
-        connection?.disconnect();
-        connection?.destroy();
-        connection = null;
-        if (player) {
-            player.removeAllListeners();
-            player.stop();
+        if (server){
+            if (server.player) {
+                server.player.removeAllListeners();
+                server.player.stop();
+            }
+            if (server.connection){
+                server.connection.disconnect();
+                server.connection.destroy();
+                server.connection = null;
+            }
+            server.queue = [];
+    
+            var index = servers.indexOf(server);
+            if (index !== -1) {
+                servers.splice(index, 1);
+            }
         }
-        queue = [];
-    } catch (e) { }
+    } catch (err) { 
+        throw err;
+    }
 }
 
-async function playSong(url: string) {
+async function playSong(server: Server, url: string) {
     try {
-        console.log("colocanfo pra tocar")
         let stream = await ytdl(url, { highWaterMark: 1 << 25 });
         const resource = createAudioResource(stream, {
             inputType: StreamType.Opus
         });
 
-        player.play(resource);
+        server.player.play(resource);
 
-        return entersState(player, AudioPlayerStatus.Playing, 5e3);
+        return entersState(server.player, AudioPlayerStatus.Playing, 5e3);
     }
     catch (e) {
-        queue.shift();
-        processQueue();
+        server.queue.shift();
+        processQueue(server);
     }
 }
 
-player.on('stateChange', (oldState, newState) => {
-    if (newState.status === AudioPlayerStatus.Idle && oldState.status !== AudioPlayerStatus.Idle) {
-        queue.shift();
-        processQueue();
-    }
-});
-
-async function processQueue() {
+async function processQueue(server: Server|undefined) {
     try {
-        if (queue.length > 0) {
-            await playSong(queue[0]);
+        if (server)
+        if (server.queue.length > 0) {
+            await playSong(server, server.queue[0]);
         }
         else {
-            if (connection) {
-                connection.disconnect();
-                connection.destroy();
-                connection = null;
-            }
-            if (player) {
-                player.removeAllListeners();
-                player.stop();
-            }
-            queue = [];
+            disconnect(server);
         }
     } catch (e) { }
 }
