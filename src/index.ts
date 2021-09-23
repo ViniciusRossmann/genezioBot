@@ -1,14 +1,17 @@
 require('dotenv/config');
 const { Client } = require('discord.js');
-import { tocar, pular } from './commands/music';
+import MusicPlayer from "./commands/music";
 
 const prefix = "!";
 
 const client = new Client({ intents: ['GUILDS', 'GUILD_MESSAGES', 'GUILD_VOICE_STATES'] });
 client.login(process.env.BOT_TOKEN);
 
+var musicPlayer = new MusicPlayer(client);
+
 client.on('ready', async () => {
     console.log(`Logged in as ${client.user.tag}!`);
+    client.user.setActivity("TUDO", { type: "WATCHING"})
 });
 
 client.on("messageCreate", async (message: any) => {
@@ -20,10 +23,10 @@ client.on("messageCreate", async (message: any) => {
     const command = args.shift().toLowerCase();
 
     if (command == "tocar"){
-        tocar(message, args.join(" "));
+        musicPlayer.tocar(message, args.join(" "));
     }
     if (command == "pular"){
-        pular(message);
+        musicPlayer.pular(message);
     }
 });
 
