@@ -22,10 +22,10 @@ client.on("messageCreate", async (message: any) => {
     const args = commandBody.split(' ');
     const command = args.shift().toLowerCase();
 
-    if (command == "tocar"){
+    if (command == "tocar" || command == "t"){
         musicPlayer.tocar(message, args.join(" "));
     }
-    if (command == "pular"){
+    if (command == "pular" || command == "p"){
         musicPlayer.pular(message);
     }
 });
