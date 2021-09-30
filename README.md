@@ -16,7 +16,7 @@ Você pode adicioná-lo ao seu servidor [clicando aqui](https://discord.com/api/
 !t https://www.youtube.com/watch?v=iywaBOMvYLI
 ```
 
-- Pular para o próximo video (ou sair da sala, caso não mais nada na fila)
+- Pular para o próximo video (ou sair da sala, caso não tenha mais nada na fila)
 
 !pular ou !p
 
