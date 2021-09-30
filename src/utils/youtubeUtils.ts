@@ -1,16 +1,15 @@
-import * as youtubeSearch from "youtube-search";
+import { YouTubeSearchOptions, YouTubeSearchResults } from "youtube-search";
 var search = require('youtube-search');
 
-const opts: youtubeSearch.YouTubeSearchOptions = {
+const opts: YouTubeSearchOptions = {
     maxResults: 1,
     key: process.env.GOOGLE_KEY
 };
 
 export async function getURLfromSearch(pesquisa: string){
     return new Promise((result, error) => {
-        search(pesquisa, opts, (err: any, results: any) => {
+        search(pesquisa, opts, (err: any, results: YouTubeSearchResults[]) => {
             if(err) error(err);
-            //@ts-ignore
             else result(results[0].link);
         });
     });

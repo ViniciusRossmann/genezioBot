@@ -18,7 +18,7 @@ export default class MusicPlayer {
 
     constructor(client: any){
         this.client = client;
-        this.servers = []
+        this.servers = [];
     }
 
     public async tocar(message: any, arg: any) {
@@ -156,15 +156,14 @@ export default class MusicPlayer {
     private async processQueue(server: Server|undefined) {
         try {
             if (server) {
-                
                 var channel = this.client.channels.cache.get(server.connection?.joinConfig.channelId)
-                if (channel.members.size < 2){
+                if (channel.members.size < 2){ //leave if are alone
                     this.disconnect(server);
                 }
-                else if (server.queue.length > 0) {
+                else if (server.queue.length > 0) { //play next song
                     await this.playSong(server, server.queue[0]);
                 }
-                else {
+                else { //leave if there is no next song
                     this.disconnect(server);
                 }
             }
