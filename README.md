@@ -2,8 +2,6 @@
 
 Bot para tocar musicas (ou sons de videos em geral) em canais de voz do discord.
 
-Você pode adicioná-lo ao seu servidor [clicando aqui](https://discord.com/api/oauth2/authorize?client_id=888232789906964550&permissions=0&scope=bot), ou instalar sua própria versão, seguindo as intruções desse documento.
-
 ## Comandos
 
 - Reproduzir video / adicionar à fila de reprodução 
