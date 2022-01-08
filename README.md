@@ -31,7 +31,6 @@ Bot para tocar musicas (ou sons de videos em geral) em canais de voz do discord.
 É necessário criar um arquivo .env na raiz do projeto, com os seguintes parâmetros:
 
 - BOT_TOKEN: seu token de bot no discord
-- GOOGLE_KEY: seu token de acesso à api de dados do youtube
 
 ### Instalação dos módulos necessários:
 
