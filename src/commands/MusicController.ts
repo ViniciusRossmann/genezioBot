@@ -1,6 +1,4 @@
-import {
-    VoiceConnectionStatus,
-} from '@discordjs/voice';
+import { VoiceConnectionStatus } from '@discordjs/voice';
 import { Player, QueryType } from 'discord-player';
 import { Client } from "discord.js";
 
@@ -98,13 +96,15 @@ class MusicController {
         }
     }
 
-    private async isValid(interaction: any): Promise<boolean> {
+    private isValid(interaction: any): boolean {
         try {
             if (!interaction.member.voice.channelId) {
-                return await interaction.reply({ content: "Você não está em um canal de voz!", ephemeral: true });
+                interaction.reply({ content: "❌ | Você não está em um canal de voz!", ephemeral: true });
+                return false;
             }
             if (interaction.guild.me.voice.channelId && interaction.member.voice.channelId !== interaction.guild.me.voice.channelId) {
-                return await interaction.reply({ content: "Você está em um canal de voz diferente do meu!", ephemeral: true });
+                interaction.reply({ content: "❌ | Você está em um canal de voz diferente do meu!", ephemeral: true });
+                return false;
             }
             return true;
         }
@@ -114,5 +114,4 @@ class MusicController {
     }
 }
 
-export default MusicController
-
+export default MusicController;
