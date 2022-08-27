@@ -9,7 +9,6 @@ class MusicController {
     private player: Player;
 
     constructor(client: Client) {
-        //@ts-ignore
         this.player = new Player(client); 
 
         this.player.on('trackStart', (queue, track) => {
@@ -40,7 +39,7 @@ class MusicController {
         );
         
         //@ts-ignore
-        queue.metadata.player.edit({ embeds });
+        queue.metadata.player?.edit({ embeds });
     }
 
     private getShortName(title: string) {
@@ -51,7 +50,6 @@ class MusicController {
 
     public async sendPlayer(message: Message) {
         if (!message.guildId || !message.guild) return;
-        //@ts-ignore
         const queue = this.player.getQueue(message.guildId) || await this.player.createQueue(message.guild, {
             ytdlOptions: {
                 quality: "highest",
@@ -110,6 +108,8 @@ class MusicController {
             ]
         })
 
+        console.log("player id: ", plr.id)
+
         //@ts-ignore
         queue.metadata["player"] = plr;
     }
@@ -125,7 +125,7 @@ class MusicController {
                 })
                 .catch(() => { });
             if (!searchResult || !searchResult.tracks.length) {
-                return; //void message.reply({ content: '❌ | Nenhum resultado encontrado!' });
+                return this.sendAlert(message, `Nenhum resultado encontrado!`, 'FF0000');
             }
 
             const queue = this.player.getQueue(message.guildId) || await this.player.createQueue(message.guild, {
@@ -148,9 +148,9 @@ class MusicController {
             searchResult.playlist ? queue.addTracks(searchResult.tracks) : queue.addTrack(searchResult.tracks[0]);
             if (!queue.playing) await queue.play();
 
-            return this.sendAlert(message, `▶ | Coloquei **${searchResult.tracks[0].title}** na fila!`, '00FF00');
+            return this.sendAlert(message, `🗿 Coloquei **${searchResult.tracks[0].title}** na fila!`, '00FF00');
         } catch (err) {
-            console.log(err)
+            console.error(err);
             return;
         }
     }
@@ -184,7 +184,7 @@ class MusicController {
             }
             const currentTrack = queue.current;
             const success = queue.skip();
-            return this.sendAlert(message, success ? `✅ | Pulei **${currentTrack.title}**!` : '❌ | Algo deu errado!', 'FF0000');
+            return this.sendAlert(message, success ? `Pulei **${currentTrack.title}**!` : '❌ | Algo deu errado!', success ? '00FF00' : 'FF0000');
         } catch (err) {
             console.log(err)
             return false;
