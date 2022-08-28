@@ -1,3 +1,5 @@
+## em manutenção
+
 # GenezioBot
 
 Bot para tocar musicas (ou sons de videos em geral) em canais de voz do discord.

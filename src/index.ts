@@ -7,7 +7,7 @@ if (!process.env.DB) {
     process.exit(0);
 }
 
-connectDB(process.env.DB, async (err, status) => {
+connectDB(process.env.DB, async (err: Error|null, status: string) => {
     if (err) {
         console.error("Database error", err);
         process.exit(1);

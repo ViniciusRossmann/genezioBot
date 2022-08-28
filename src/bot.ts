@@ -1,14 +1,30 @@
-import { Client, GatewayIntentBits, ActivityType, GuildBasedChannel, ChannelType, EmbedBuilder, TextBasedChannel, ModalBuilder, TextInputBuilder, ButtonBuilder, TextInputStyle, ActionRowBuilder, MessageComponentBuilder } from "discord.js";
-import { joinVoiceChannel } from "@discordjs/voice";
+import { Client, GatewayIntentBits, ActivityType } from "discord.js";
 import { addSpeechEvent } from "discord-speech-recognition";
 import MusicController from "./player/MusicController";
-import connectDB from './utils/DBConnector';
-require('dotenv/config');
+import GuildConfig, { GuildConfigDocument } from "./models/GuildConfigModel";
+import { replyAlert } from './utils/ChatAlert';
+import { dictionary } from './utils/Dictionary';
 
-function initBot(token: string) {
-    const prefix = "!";
-    const gatilho = "jamal";
+async function getGuildConfig(id: string): Promise<GuildConfigDocument|null> {
+    try {
+        const config = await GuildConfig.findById(id);
+        return config;
+    } catch {
+        return null;
+    }
+}
 
+async function setGuildConfig(_id: string, player_channel: string, player_message: string) {
+    const config = { _id, player_channel, player_message };
+    try {
+        await GuildConfig.findOneAndUpdate({ _id: config._id }, config, { new: true, upsert: true });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function initBot(token: string) {
     const client = new Client({
         intents: [
             GatewayIntentBits.GuildVoiceStates,
@@ -24,89 +40,110 @@ function initBot(token: string) {
     const musicController = new MusicController(client);
 
     client.on("messageCreate", async (message) => {
-        if (message.author.bot) return;
+        if (message.author.bot || !message.guildId) return;
 
-        const command = message.content;
-
-        if (command == "musica") {
-            musicController.sendPlayer(message);
+        if (message.content == "!setup") {
+            const guild_player = await musicController.sendPlayer(message);
+            if (!guild_player) return await replyAlert(message, "Não foi possível concluir o setup.", "FF0000");
+            const res = await setGuildConfig(message.guildId, message.channelId, guild_player);
+            if (!res) replyAlert(message, "Não foi possível concluir o setup.", "FF0000");
+            return;
         }
-        else if (command == "entre" || command == "venha") {
-            const voiceChannel = message.member?.voice.channel;
-            if (voiceChannel) {
-                try {
-                    joinVoiceChannel({
-                        channelId: voiceChannel.id,
-                        guildId: voiceChannel.guild.id,
-                        adapterCreator: voiceChannel.guild.voiceAdapterCreator,
-                        selfDeaf: false,
-                    });
-                    message.reply({ content: `✅ | Sim, meu rei. Para me chamar use a palavra **${gatilho}**.` });
-                } catch (e) {
-                    message.reply({ content: "❌ | Aconteceu um erro inesperado!" });
-                }
-            } else {
-                message.reply({ content: "❌ | Você não está em um canal de voz!" });
-            }
-        }
-        else {
-            //@ts-ignore
-            /*if (message.channel?.name?.includes('⏩')) {
-                console.log("teste")
-                const messages = message.channel.lastMessage;
-                console.log("teste ", messages)
-                await musicController.play(message, message.content);
-                try { message.delete(); } catch {}
-            }*/
 
+        const guildConfig = await getGuildConfig(message.guildId);
 
-            message.channel.messages.fetch("1012897900537331762")
-                .then(message => console.log(message))
-                .catch(console.error);
+        if (message.channelId != guildConfig?.player_channel) return;
+
+        if (!guildConfig) {
+            return await replyAlert(message, "Não foram encontradas configurações para esse servidor. \nUse o comando !setup em algum canal.", "FFFF00");
         }
+
+        if (!message.member?.voice?.channelId) { 
+            await replyAlert(message, "Você não está em um canal de voz!", "FFFF00");
+            try { message.delete() } catch {}
+            return;
+        }
+
+        const player_channel = await client.channels.fetch(guildConfig.player_channel);
+        if (!player_channel || !player_channel.isTextBased()) { 
+            await replyAlert(message, "Não foi possível concluir o comando. \nTente executar o !setup novamente.", "FF0000");
+            try { message.delete() } catch {}
+            return;
+        }
+        
+        const player_message = await player_channel.messages.fetch(guildConfig.player_message);
+        if (!player_message) { 
+            await replyAlert(message, "Não foi possível concluir o comando. \nTente executar o !setup novamente.", "FF0000");
+            try { message.delete() } catch {}
+            return;
+        }
+
+        await musicController.play(message.author, player_message, message.content);
+        try { message.delete() } catch {}
     });
 
     client.on('interactionCreate', async interaction => {
         if (interaction.isButton()) {
-            if (interaction.customId == "add_queue") {
-                const modal = new ModalBuilder()
-                    .setCustomId('search_modal')
-                    .setTitle('Adicionar à fila');
+            if (!interaction.guildId) return;
+            const guildConfig = await getGuildConfig(interaction.guildId);
+            if (!guildConfig) return;
 
-                const queryInput = new TextInputBuilder()
-                    .setCustomId('query_song')
-                    .setLabel("O que você quer tocar?")
-                    .setStyle(TextInputStyle.Short);
+            const player_channel = await client.channels.fetch(guildConfig.player_channel);
+            if (!player_channel || !player_channel.isTextBased()) return;
+            const player_message = await player_channel.messages.fetch(guildConfig.player_message);
+            if (!player_message) return;
 
-                const firstActionRow: any = new ActionRowBuilder().addComponents(queryInput);
-
-                modal.addComponents(firstActionRow);
-
-                await interaction.showModal(modal);
+            if (interaction.customId == "play") {
+                musicController.play(interaction.user, player_message, "");
+            }
+            if (interaction.customId == "stop_queue") {
+                musicController.stop(interaction.user, player_message);
             }
             if (interaction.customId == "skip_track") {
-                musicController.skip(interaction);
+                musicController.skip(interaction.user, player_message);
             }
-        }
-        if (interaction.isModalSubmit()) {
-            const query = interaction.fields.fields.get('query_song')?.value;
-            if (query) musicController.play(interaction, query);
-            //interaction.reply({ content: 'ok' });
+            interaction.deferUpdate();
         }
     });
 
-    client.on("speech", (msg) => {
-        const conteudo = msg.content?.toLowerCase();
-        if (!conteudo || !conteudo.includes(gatilho)) return;
+    client.on("speech", async msg => {
+        console.log(msg.content)
 
-        console.log(conteudo);
+        let content: string = msg.content?.toLowerCase()||"";
+        if (!content || !content.includes(dictionary.hotword)) return;
 
-        /*if (conteudo.includes('toca') || conteudo.includes('toque') || conteudo.includes('tocar')) {
-            musicController.play(msg.channel.guild, msg.channel, conteudo.replace(gatilho, '').replace('toca', '').replace('toque', '').replace('tocar', ''));
+        content = content.replace(dictionary.hotword, '').trim();
+        console.log(content);
+
+        const guildConfig = await getGuildConfig(msg.guild.id);
+        if (!guildConfig) return;
+        const player_channel = await client.channels.fetch(guildConfig.player_channel);
+        if (!player_channel || !player_channel.isTextBased()) return;
+        const player_message = await player_channel.messages.fetch(guildConfig.player_message);
+        if (!player_message) return;
+
+        let find_command = false;
+
+        for (let index in dictionary.play) {
+            const word = dictionary.play[index];
+            if (content.includes(word)) {
+                find_command = true;
+                const query = content.replace(word, '').trim();
+                musicController.play(msg.author, player_message, query);
+                break;
+            }
         }
-        if (conteudo.includes('pula') || conteudo.includes('pular')) {
-            musicController.skip(msg.channel.guild, msg.channel);
-        }*/
+
+        if (find_command) return;
+
+        for (let index in dictionary.skip) {
+            const word = dictionary.skip[index];
+            if (content.includes(word)) {
+                find_command = true;
+                musicController.skip(msg.author, player_message);
+                break;
+            }
+        }
     });
 
     client.on('ready', async () => {

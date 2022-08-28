@@ -2,8 +2,8 @@ import {
     VoiceConnectionStatus,
 } from '@discordjs/voice';
 import { Player, QueryType, Queue } from 'discord-player';
-import { Client, Message, GatewayIntentBits, ActivityType, ChannelType, EmbedBuilder, ModalBuilder, TextInputBuilder, ButtonBuilder, TextInputStyle, ActionRowBuilder, MessageComponentBuilder, Interaction, InteractionType } from "discord.js";
-import { NODATA } from 'dns';
+import { Client, Message, GatewayIntentBits, ActivityType, ChannelType, EmbedBuilder, ModalBuilder, TextInputBuilder, ButtonBuilder, TextInputStyle, ActionRowBuilder, MessageComponentBuilder, Interaction, InteractionType, User, Guild } from "discord.js";
+import { sendAlert } from '../utils/ChatAlert';
 
 class MusicController {
     private player: Player;
@@ -39,7 +39,7 @@ class MusicController {
         );
         
         //@ts-ignore
-        queue.metadata.player?.edit({ embeds });
+        queue.metadata.player_message?.edit({ embeds });
     }
 
     private getShortName(title: string) {
@@ -57,7 +57,8 @@ class MusicController {
                 highWaterMark: 1 << 25,
                 dlChunkSize: 0,
             },
-            metadata: { channel: message.channel },
+            metadata: { player_message: null },
+            leaveOnEnd: false
         });
 
         const embed = new EmbedBuilder()
@@ -77,16 +78,8 @@ class MusicController {
                                 "id": "971015680600199178"
                             },
                             "style": 2,
-                            "custom_id": "add_queue"
+                            "custom_id": "play"
                         },
-                        /*{
-                            "type": 2,
-                            "emoji": {
-                                "id": ""
-                            },
-                            "style": 2,
-                            "custom_id": "back_track"
-                        },*/
                         {
                             "type": 2,
                             "emoji": {
@@ -108,96 +101,94 @@ class MusicController {
             ]
         })
 
-        console.log("player id: ", plr.id)
-
         //@ts-ignore
-        queue.metadata["player"] = plr;
+        queue.metadata['player_message'] = plr;
+
+        return plr.id;
     }
 
-    public async play(message: any, query: string) {
+    public async play(author: User, player_message: Message, query: string) {
         try {
-            //if (!this.isValid(message)) return;
+            if (!player_message.guild || !this.isValid(author, player_message)) return;
 
-            const searchResult = await this.player
-                .search(query, {
-                    requestedBy: message.user,
-                    searchEngine: QueryType.AUTO,
-                })
-                .catch(() => { });
-            if (!searchResult || !searchResult.tracks.length) {
-                return this.sendAlert(message, `Nenhum resultado encontrado!`, 'FF0000');
-            }
-
-            const queue = this.player.getQueue(message.guildId) || await this.player.createQueue(message.guild, {
+            const queue = this.player.getQueue(player_message.guild.id) || await this.player.createQueue(player_message.guild, {
                 ytdlOptions: {
                     quality: "highest",
                     filter: "audioonly",
                     highWaterMark: 1 << 25,
                     dlChunkSize: 0,
                 },
-                metadata: { channel: message.channel },
+                metadata: { player_message: player_message },
+                leaveOnEnd: false
             });
 
             try {
-                if (!queue.connection) await queue.connect(message.member.voice.channel);
+                const member_voice_channel = player_message.guild?.members.cache.find(item => item.id == author.id)?.voice.channel;
+                if (!queue.connection && member_voice_channel) await queue.connect(member_voice_channel);
             } catch {
-                void this.player.deleteQueue(message.guildId);
-                return; //message.reply({content: '❌ | Não foi possível entrar no canal de voz!',});
+                this.player.deleteQueue(player_message.guild.id);
+                return sendAlert(player_message.channel, `Não foi possível entrar no canal de voz!`, 'FF0000');
+            }
+
+            if (!query) return;
+
+            const searchResult = await this.player
+                .search(query, {
+                    requestedBy: author,
+                    searchEngine: QueryType.AUTO,
+                })
+                .catch(() => { });
+            if (!searchResult || !searchResult.tracks.length) {
+                return sendAlert(player_message.channel, `Nenhum resultado encontrado!`, 'FF0000');
             }
 
             searchResult.playlist ? queue.addTracks(searchResult.tracks) : queue.addTrack(searchResult.tracks[0]);
             if (!queue.playing) await queue.play();
 
-            return this.sendAlert(message, `🗿 Coloquei **${searchResult.tracks[0].title}** na fila!`, '00FF00');
+            return sendAlert(player_message.channel, `🗿 Coloquei **${searchResult.tracks[0].title}** na fila!`, '00FF00');
         } catch (err) {
             console.error(err);
             return;
         }
     }
 
-    public async sendAlert(message: Message|Interaction, info: string, color: string) {
-        const embed = new EmbedBuilder()
-            .setDescription(info)
-            .setColor(`#${color}`)
-
-        const alert = await message.channel?.send({
-            embeds: [embed]
-        });
-
-        if (message.type == 3) {
-            //@ts-ignore
-            message.deferUpdate();
-        }
-
-        setTimeout(() => {
-            if (alert) alert.delete();
-        }, 4000);
-    }
-
-    public async skip(message: Interaction) {
+    public async skip(author: User, player_message: Message) {
         try {
-            if (!this.isValid(message)) return;
-            if (!message.guildId) return;
-            const queue = this.player.getQueue(message.guildId);
+            if (!player_message.guild || !this.isValid(author, player_message)) return;
+            const queue = this.player.getQueue(player_message.guild.id);
             if (!queue || !queue.playing) {
-                this.sendAlert(message, '❌ | Não estou tocando nada!', 'FFFF00');
+                return sendAlert(player_message.channel, 'Não estou tocando nada!', 'FFFF00');
             }
             const currentTrack = queue.current;
             const success = queue.skip();
-            return this.sendAlert(message, success ? `Pulei **${currentTrack.title}**!` : '❌ | Algo deu errado!', success ? '00FF00' : 'FF0000');
+            return sendAlert(player_message.channel, success ? `Pulei **${currentTrack.title}**!` : '❌ | Algo deu errado!', success ? '00FF00' : 'FF0000');
         } catch (err) {
-            console.log(err)
-            return false;
+            console.error(err);
         }
     }
 
-    private async isValid(interaction: any): Promise<boolean> {
+    public async stop(author: User, player_message: Message) {
         try {
-            if (!interaction.member.voice.channelId) {
-                return await interaction.reply({ content: "Você não está em um canal de voz!", ephemeral: true });
+            if (!player_message.guild || !this.isValid(author, player_message)) return;
+            const queue = this.player.getQueue(player_message.guild.id);
+            if (!queue) return;
+            queue.clear();
+            queue.stop();
+        } catch (err) {
+            console.error(err)
+        }
+    }
+
+    private isValid(user: User, player_message: Message): boolean {
+        try {
+            const member_voice_id = player_message.guild?.members.cache.find(item => item.id == user.id)?.voice.channelId;
+            if (!member_voice_id) {
+                sendAlert(player_message.channel, "Você não está em um canal de voz!", 'FFFF00');
+                return false;
             }
-            if (interaction.guild.me.voice.channelId && interaction.member.voice.channelId !== interaction.guild.me.voice.channelId) {
-                return await interaction.reply({ content: "Você está em um canal de voz diferente do meu!", ephemeral: true });
+            if (player_message.guild.members.me?.voice.channelId && member_voice_id != player_message.guild.members.me?.voice.channelId) {
+                sendAlert(player_message.channel, "Você não está no mesmo canal de voz que eu!", 'FFFF00');
+                return false;
             }
             return true;
         }
